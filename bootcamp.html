@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI経営クエスト型ブートキャンプ</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  // ★ Firebaseのconfigをここにペーストしてください
+  const firebaseConfig = {
+    apiKey: "AIzaSyDfsjAznLBQ8bF6xeE-LhELsTwErT-cnIQ",
+    authDomain: "aibc-kensyuu-html.firebaseapp.com",
+    databaseURL: "https://aibc-kensyuu-html-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "aibc-kensyuu-html",
+    storageBucket: "aibc-kensyuu-html.firebasestorage.app",
+    messagingSenderId: "763377396217",
+    appId: "1:763377396217:web:50e4709a188ea24724b528"
+  };
+
+  window.PDF_URL = "https://kmaezawa-code.github.io/bootcamp/%E9%87%91%E9%AD%9A%E3%80%80%E4%BA%94%E5%91%B3%E7%94%B0%E3%81%95%E3%82%93.pdf";
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const sessionRef = ref(db, "bootcamp/session");
+
+  window.pushPage = function(page) {
+    set(sessionRef, { page: page, updatedAt: Date.now() });
+    updateFacilitatorUI(page);
+  };
+
+  onValue(sessionRef, (snapshot) => {
+    const data = snapshot.val();
+    const page = data ? data.page : null;
+    window.currentPage = page;
+    if (!window.isFacilitator) showStudentPage(page);
+    else updateFacilitatorUI(page || 1);
+  });
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --navy:   #142850;
+    --red:    #C00000;
+    --white:  #FFFFFF;
+    --gray:   #F2F4F7;
+    --dgray:  #666666;
+    --border: #E2E2E2;
+    --accent: #1E5799;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', sans-serif; background: var(--gray); color: #1A1A1A; min-height: 100vh; }
+
+  /* ===== ログイン ===== */
+  #login-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+    background: linear-gradient(135deg, #0d1d35 0%, #1a2e50 100%);
+  }
+  .login-box {
+    background: rgba(255,255,255,0.97); border-radius: 16px;
+    padding: 48px 40px; width: 100%; max-width: 440px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;
+  }
+  .login-logo { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--dgray); margin-bottom: 20px; }
+  .login-box h1 { font-size: 20px; font-weight: 900; color: var(--navy); margin-bottom: 8px; line-height: 1.4; }
+  .login-box p  { font-size: 13px; color: var(--dgray); margin-bottom: 32px; line-height: 1.8; }
+  .btn-group { display: flex; flex-direction: column; gap: 12px; }
+  .btn {
+    padding: 15px 24px; border-radius: 10px; font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px; font-weight: 700; cursor: pointer; border: none;
+    transition: all 0.15s; letter-spacing: 0.04em;
+  }
+  .btn:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  .btn-navy  { background: var(--navy); color: var(--white); }
+  .btn-red   { background: var(--red);  color: var(--white); }
+  .btn-white { background: var(--white); color: var(--navy); border: 2px solid var(--navy); }
+  .pw-wrap { display: none; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .pw-wrap input {
+    padding: 13px 16px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 15px; font-family: 'DM Mono', monospace; letter-spacing: 0.12em;
+    text-align: center; outline: none; transition: border-color 0.2s;
+  }
+  .pw-wrap input:focus { border-color: var(--navy); }
+  .pw-error { font-size: 12px; color: var(--red); display: none; }
+
+  /* ===== 共通ヘッダー ===== */
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 24px; background: var(--navy); color: var(--white);
+    position: sticky; top: 0; z-index: 200; box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+  .top-bar .logo { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+  .role-badge { font-size: 10px; font-weight: 700; padding: 4px 12px; border-radius: 20px; letter-spacing: 0.08em; }
+  .badge-facilitator { background: var(--red); color: var(--white); }
+  .badge-student { background: rgba(255,255,255,0.15); color: var(--white); border: 1px solid rgba(255,255,255,0.3); }
+
+  /* ===== ファシリテーター画面 ===== */
+  #facilitator-screen { display: none; }
+
+  .f-main { max-width: 1200px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  /* 現在ページ表示バー */
+  .current-bar {
+    background: var(--white); border: 2px solid var(--navy); border-radius: 10px;
+    padding: 14px 24px; margin-bottom: 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .current-bar .cb-left { display: flex; align-items: center; gap: 12px; }
+  .current-bar .label { font-size: 11px; color: var(--dgray); font-weight: 700; letter-spacing: 0.08em; }
+  .current-bar .value { font-size: 17px; font-weight: 900; color: var(--navy); }
+  .page-nav { display: flex; align-items: center; gap: 8px; }
+  .nav-btn {
+    width: 34px; height: 34px; border-radius: 7px; border: 1.5px solid var(--border);
+    background: var(--white); cursor: pointer; font-size: 16px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; color: var(--navy);
+  }
+  .nav-btn:hover { background: var(--navy); color: var(--white); border-color: var(--navy); }
+  .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .page-indicator { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--navy); min-width: 64px; text-align: center; }
+  .jump-wrap { display: flex; align-items: center; gap: 8px; }
+  .jump-wrap label { font-size: 12px; color: var(--dgray); font-weight: 700; }
+  .jump-wrap input {
+    width: 58px; padding: 7px 10px; border: 1.5px solid var(--border);
+    border-radius: 6px; font-size: 13px; font-family: 'DM Mono', monospace;
+    text-align: center; outline: none; transition: border-color 0.2s;
+  }
+  .jump-wrap input:focus { border-color: var(--navy); }
+  .jump-btn {
+    padding: 7px 14px; background: var(--navy); color: var(--white);
+    border: none; border-radius: 6px; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .jump-btn:hover { opacity: 0.85; }
+
+  /* 目次グリッド */
+  .section-title {
+    font-size: 13px; font-weight: 900; color: var(--navy);
+    letter-spacing: 0.08em; margin-bottom: 14px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--navy);
+  }
+
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .toc-card {
+    background: var(--white); border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 16px 18px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toc-card:hover { border-color: var(--navy); box-shadow: 0 2px 12px rgba(20,40,80,0.10); transform: translateY(-2px); }
+  .toc-card.active { border-color: var(--red); background: #FFF5F5; }
+
+  .toc-card .tc-page {
+    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+    color: var(--dgray); margin-bottom: 5px; letter-spacing: 0.1em;
+  }
+  .toc-card.active .tc-page { color: var(--red); }
+  .toc-card .tc-label { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 4px; line-height: 1.4; }
+  .toc-card .tc-sub   { font-size: 11px; color: var(--dgray); line-height: 1.5; }
+
+  /* 判定シート */
+  .judge-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+    margin-bottom: 32px;
+  }
+  .judge-card { border-radius: 10px; padding: 16px 18px; border-left: 4px solid; }
+  .judge-card.step2  { background: #EBF0F8; border-color: var(--accent); }
+  .judge-card.hata   { background: #FBE6E8; border-color: var(--red); }
+  .judge-card.consul { background: #F0F0F0; border-color: #404040; }
+  .judge-card .jtype { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 5px; }
+  .judge-card.step2  .jtype { color: var(--accent); }
+  .judge-card.hata   .jtype { color: var(--red); }
+  .judge-card.consul .jtype { color: #404040; }
+  .judge-card .jcond { font-size: 12px; color: #444; margin-bottom: 8px; line-height: 1.6; }
+  .judge-card .jtalk {
+    font-size: 12px; color: #1A1A1A; line-height: 1.7;
+    background: rgba(255,255,255,0.7); border-radius: 6px;
+    padding: 10px; font-style: italic;
+  }
+
+  /* ===== 受講生画面 ===== */
+  #student-screen { display: none; }
+  .s-pdf-wrap {
+    width: 100%; height: calc(100vh - 49px);
+    display: flex; align-items: center; justify-content: center;
+    background: #2a2a2a;
+  }
+  .s-pdf-wrap canvas { max-width: 100%; max-height: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.5); }
+  .waiting-overlay {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 20px; color: rgba(255,255,255,0.7);
+  }
+  .dot-loader { display: flex; gap: 8px; }
+  .dot-loader span {
+    width: 10px; height: 10px; background: rgba(255,255,255,0.5);
+    border-radius: 50%; animation: bounce 1.2s infinite ease-in-out;
+  }
+  .dot-loader span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-loader span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40%           { transform: scale(1.0); opacity: 1; }
+  }
+  .waiting-overlay p { font-size: 14px; font-weight: 700; letter-spacing: 0.06em; }
+
+  canvas { display: block; }
+
+  @media (max-width: 640px) {
+    .toc-grid   { grid-template-columns: 1fr; }
+    .judge-grid { grid-template-columns: 1fr; }
+    .current-bar { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ログイン -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">AI Management Quest Bootcamp</div>
+    <h1>AI経営クエスト型<br>ブートキャンプ</h1>
+    <p>参加される役割を選択してください。<br>ファシリテーターの方はパスワードが必要です。</p>
+    <div class="btn-group">
+      <button class="btn btn-white" onclick="enterStudent()">受講生として参加</button>
+      <button class="btn btn-navy" onclick="showPasswordInput()">ファシリテーターとして参加</button>
+    </div>
+    <div class="pw-wrap" id="pw-wrap">
+      <input type="password" id="pw-input" placeholder="パスワードを入力"
+             onkeydown="if(event.key==='Enter') checkPassword()"/>
+      <button class="btn btn-red" onclick="checkPassword()">ログイン</button>
+      <span class="pw-error" id="pw-error">パスワードが違います</span>
+    </div>
+  </div>
+</div>
+
+<!-- ファシリテーター画面 -->
+<div id="facilitator-screen">
+  <div class="top-bar">
+    <span class="logo">AI経営クエスト型ブートキャンプ ─ ファシリテーター管理画面</span>
+    <span class="role-badge badge-facilitator">FACILITATOR</span>
+  </div>
+  <div class="f-main">
+
+    <!-- 現在ページ表示 & ページ操作 -->
+    <div class="current-bar">
+      <div class="cb-left">
+        <span class="label">現在の受講生画面</span>
+        <span class="value" id="current-chapter">—</span>
+      </div>
+      <div class="page-nav">
+        <button class="nav-btn" id="btn-prev" onclick="prevPage()">‹</button>
+        <div class="page-indicator" id="page-indicator">— / 39</div>
+        <button class="nav-btn" id="btn-next" onclick="nextPage()">›</button>
+      </div>
+      <div class="jump-wrap">
+        <label>ページ指定</label>
+        <input type="number" id="jump-input" min="1" max="39" placeholder="例: 3"
+               onkeydown="if(event.key==='Enter') jumpToPage()"/>
+        <button class="jump-btn" onclick="jumpToPage()">移動</button>
+      </div>
+    </div>
+
+    <!-- 目次グリッド -->
+    <div class="section-title">▶ 目次 ─ クリックで受講生画面を切り替え</div>
+    <div class="toc-grid" id="toc-grid"></div>
+
+    <!-- 判定シート -->
+    <div class="section-title">▶ 受講者判定シート（受講者には見せない）</div>
+    <div class="judge-grid">
+      <div class="judge-card step2">
+        <div class="jtype">→ STEP 2</div>
+        <div class="jcond">合計50点以上 / D-Z 10点以上<br>または AIをもっと学びたいチェックあり</div>
+        <div class="jtalk">「今日のドリルを見る限り、AIを判断に使える土台はできています。次は社長自身が毎日の判断にAIを入れる習慣を、1ヶ月で固めましょう。」</div>
+      </div>
+      <div class="judge-card hata">
+        <div class="jtype">→ 働き方4.0</div>
+        <div class="jcond">合計50点以上 / D-Z 9点以下 + 課題チェック3〜6あり<br>または 合計35〜49点 + 課題チェックあり</div>
+        <div class="jtalk">「AIを入れる前に、まず御社の業務とコスト構造を整理する価値がありそうです。次回、一緒にやってみませんか。」</div>
+      </div>
+      <div class="judge-card consul">
+        <div class="jtype">→ 個別面談</div>
+        <div class="jcond">合計35〜49点 + 課題チェックなし<br>または 合計34点以下</div>
+        <div class="jtalk">「今日は一歩目です。次回30分だけ個別でお話しして、御社の最初の一歩を一緒に決めましょう。」</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 受講生画面 -->
+<div id="student-screen">
+  <div class="top-bar">
+    <span class="logo">AI経営クエスト型ブートキャンプ</span>
+    <span class="role-badge badge-student">PARTICIPANT</span>
+  </div>
+  <div class="s-pdf-wrap" id="student-pdf-wrap">
+    <div class="waiting-overlay" id="waiting-overlay">
+      <div class="dot-loader"><span></span><span></span><span></span></div>
+      <p>ファシリテーターの指示をお待ちください</p>
+    </div>
+    <canvas id="s-canvas" style="display:none;"></canvas>
+  </div>
+</div>
+
+<script>
+const FACILITATOR_PASSWORD = "bootcamp2025";
+const TOTAL_PAGES = 39;
+
+const TOC = [
+  { page: 1,  label: "プロローグ・アジェンダ",             sub: "9つの事実 / 本日の流れ" },
+  { page: 3,  label: "事実01｜人間は「金魚」になる",        sub: "孫正義の予言 / SoftBank World" },
+  { page: 7,  label: "事実02｜ロボットが人間より速く走った", sub: "北京ハーフマラソン / 1年で2:40→48分" },
+  { page: 11, label: "事実03｜無人タクシーはもう日常",       sub: "Waymo / 週25万回・1年で4倍" },
+  { page: 14, label: "事実04｜AIの王者はまだ決まっていない", sub: "GPT / Gemini / Claude 覇権競争" },
+  { page: 17, label: "事実05｜AI企業が現場に乗り込む",       sub: "FDE求人 9ヶ月で+800%" },
+  { page: 20, label: "事実06｜米国でホワイトカラーの血の海", sub: "Anthropic CEO警告 / Goldman 3億人" },
+  { page: 23, label: "事実07｜日本も無関係ではない",          sub: "NRI×Oxford / 労働人口49%が代替可能" },
+  { page: 26, label: "事実08｜最大の問題は日本の遅れ",        sub: "AI利用率 中国96% vs 日本55%" },
+  { page: 29, label: "事実09｜人間の脳にチップが入る",        sub: "Neuralink / 21人にすでに移植済み" },
+  { page: 33, label: "事実10｜ロボットが指先を手に入れる",    sub: "Figure 02 / BMW工場で3万台" },
+  { page: 35, label: "まとめ｜クロージング・3つの選択",       sub: "A・B・C の選択 / 本日のまとめ" },
+];
+
+// PDF.js
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+let pdfDoc = null;
+window.currentPage = 1;
+window.isFacilitator = false;
+
+async function loadPDF() {
+  try {
+    pdfDoc = await pdfjsLib.getDocument(window.PDF_URL).promise;
+  } catch(e) {
+    console.warn("PDF読み込みエラー:", e);
+  }
+}
+
+async function renderPage(pageNum, canvasId, scale) {
+  if (!pdfDoc) return;
+  const page = await pdfDoc.getPage(pageNum);
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext("2d");
+  const viewport = page.getViewport({ scale });
+  canvas.width  = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+}
+
+// ログイン
+function enterStudent() {
+  window.isFacilitator = false;
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("student-screen").style.display = "block";
+  loadPDF();
+}
+
+function showPasswordInput() {
+  document.getElementById("pw-wrap").style.display = "flex";
+  document.getElementById("pw-input").focus();
+}
+
+function checkPassword() {
+  const val = document.getElementById("pw-input").value;
+  if (val === FACILITATOR_PASSWORD) {
+    window.isFacilitator = true;
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("facilitator-screen").style.display = "block";
+    buildTOC();
+    loadPDF().then(() => {
+      updateFacilitatorUI(1);
+    });
+  } else {
+    document.getElementById("pw-error").style.display = "block";
+    document.getElementById("pw-input").value = "";
+  }
+}
+
+// 目次グリッド構築
+function buildTOC() {
+  const grid = document.getElementById("toc-grid");
+  grid.innerHTML = "";
+  TOC.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "toc-card";
+    card.id = "toc-" + item.page;
+    card.innerHTML = `
+      <div class="tc-page">p.${item.page}</div>
+      <div class="tc-label">${item.label}</div>
+      <div class="tc-sub">${item.sub}</div>`;
+    card.onclick = () => window.pushPage(item.page);
+    grid.appendChild(card);
+  });
+}
+
+// ファシリテーターUI更新
+function updateFacilitatorUI(page) {
+  window.currentPage = page;
+  document.getElementById("page-indicator").textContent = `${page} / ${TOTAL_PAGES}`;
+  document.getElementById("btn-prev").disabled = page <= 1;
+  document.getElementById("btn-next").disabled = page >= TOTAL_PAGES;
+
+  // カードハイライト
+  document.querySelectorAll(".toc-card").forEach(el => el.classList.remove("active"));
+  let active = null;
+  TOC.forEach(item => { if (item.page <= page) active = item; });
+  if (active) {
+    const el = document.getElementById("toc-" + active.page);
+    if (el) el.classList.add("active");
+    document.getElementById("current-chapter").textContent = active.label;
+  }
+}
+
+// ページ操作
+function prevPage() {
+  if (window.currentPage > 1) window.pushPage(window.currentPage - 1);
+}
+function nextPage() {
+  if (window.currentPage < TOTAL_PAGES) window.pushPage(window.currentPage + 1);
+}
+function jumpToPage() {
+  const val = parseInt(document.getElementById("jump-input").value);
+  if (val >= 1 && val <= TOTAL_PAGES) {
+    window.pushPage(val);
+    document.getElementById("jump-input").value = "";
+  }
+}
+
+// 受講生画面
+function showStudentPage(page) {
+  const waiting = document.getElementById("waiting-overlay");
+  const canvas  = document.getElementById("s-canvas");
+  if (!pdfDoc || !page) {
+    waiting.style.display = "flex";
+    canvas.style.display  = "none";
+    return;
+  }
+  waiting.style.display = "none";
+  canvas.style.display  = "block";
+  const wrap = document.getElementById("student-pdf-wrap");
+  const scale = Math.min(wrap.clientWidth / 1190, wrap.clientHeight / 840);
+  renderPage(page, "s-canvas", scale);
+}
+
+// キーボード操作（ファシリテーター用）
+document.addEventListener("keydown", (e) => {
+  if (!window.isFacilitator) return;
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") nextPage();
+  if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   prevPage();
+});
+
+window.addEventListener("resize", () => {
+  if (!window.isFacilitator) showStudentPage(window.currentPage);
+});
+</script>
+</body>
+</html>
